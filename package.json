@@ -1,0 +1,32 @@
+{
+  "name": "developer-privacy-guard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "benchmark": "tsx tests/benchmark.ts",
+    "evaluate": "tsx tests/evaluate.ts",
+    "lint": "eslint src obsidian-plugin/src web/main.ts tests"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "esbuild": "0.25.5",
+    "eslint": "10.14.0",
+    "obsidian": "1.8.7",
+    "tsx": "4.20.3",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "3.2.2"
+  },
+  "dependencies": {
+    "@secretlint/core": "13.0.4",
+    "@secretlint/secretlint-rule-anthropic": "13.0.4",
+    "@secretlint/secretlint-rule-aws": "13.0.4",
+    "@secretlint/secretlint-rule-github": "13.0.4",
+    "@secretlint/secretlint-rule-gitlab": "13.0.4",
+    "@secretlint/secretlint-rule-openai": "13.0.4",
+    "@secretlint/secretlint-rule-stripe": "13.0.4"
+  }
+}

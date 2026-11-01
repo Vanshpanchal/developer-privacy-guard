@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Sanitize developer logs, configuration, and code locally in your browser before sharing. No upload, account, or saved history.">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+    <meta name="theme-color" content="#0d1519">
+    <title>Developer Privacy Guard</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <noscript><div class="noscript">Developer Privacy Guard needs JavaScript to scan locally in your browser.</div></noscript>
+    <div class="page-shell">
+      <header class="site-header">
+        <div class="brand"><img class="brand-mark" src="./favicon.svg" width="32" height="32" alt=""><span>DEVELOPER <strong>PRIVACY GUARD</strong></span></div>
+        <span class="header-badge"><span class="status-dot" aria-hidden="true"></span> Local browser processing</span>
+      </header>
+
+      <main>
+        <section class="intro" aria-labelledby="page-title">
+          <div class="eyebrow">A safer step before you share</div>
+          <h1 id="page-title">Share the context.<br><em>Catch the secrets.</em></h1>
+          <p>Paste logs, configuration, or code. Find common credentials and sensitive identifiers, then review a sanitized copy before it leaves your browser.</p>
+          <div class="privacy-note"><span aria-hidden="true">●</span> Your text stays in this tab. No account, uploads, telemetry, or saved history.</div>
+        </section>
+
+        <section class="workspace" aria-label="Sanitizer workspace">
+          <div class="workspace-topline"><span>WORKSPACE <span class="separator">/</span> SANITIZER</span><span class="session-tag">SESSION ONLY</span></div>
+          <div class="panels">
+            <section class="panel input-panel" aria-labelledby="input-title">
+              <div class="panel-heading"><div><span class="step">01</span><h2 id="input-title">Original text</h2></div><span id="input-count" class="meta">0 characters</span></div>
+              <label class="sr-only" for="input">Text to sanitize</label>
+              <textarea id="input" spellcheck="false" placeholder="Paste a log, .env file, stack trace, or configuration here…"></textarea>
+              <div class="input-footer"><span>Maximum 1,000,000 characters</span><span>Nothing is sent to a server</span></div>
+            </section>
+
+            <section class="panel output-panel" aria-labelledby="output-title">
+              <div class="panel-heading"><div><span class="step">02</span><h2 id="output-title">Sanitized output</h2></div><span id="output-state" class="meta">Awaiting scan</span></div>
+              <label class="sr-only" for="output">Sanitized text</label>
+              <textarea id="output" readonly spellcheck="false" placeholder="Your sanitized text will appear here. Review it before sharing."></textarea>
+              <div class="output-footer"><span id="summary">No scan yet.</span><button id="copy" class="copy-button" type="button" disabled>Copy output</button></div>
+            </section>
+          </div>
+
+          <div class="controls">
+            <div class="control-group"><label for="profile">Protection profile</label><select id="profile" aria-describedby="profile-help"><option value="balanced">Balanced</option><option value="strict">Strict</option><option value="credentials">Credentials only</option></select><span id="profile-help" class="profile-help">Covers common credentials and identifiers.</span></div>
+            <button id="sanitize" class="primary-button" type="button" disabled>Sanitize text <span aria-hidden="true">→</span></button>
+            <button id="clear" class="text-button" type="button">Clear session</button>
+          </div>
+          <details class="session-rules"><summary>Session rules <span>Optional identifiers and domains</span></summary><div class="rules-grid"><div><label for="identifiers">Confidential identifiers</label><textarea id="identifiers" spellcheck="false" placeholder="One value per line"></textarea></div><div><label for="domains">Protected domains</label><textarea id="domains" spellcheck="false" placeholder="One domain per line"></textarea></div></div><p>These values remain in memory only while this tab is open. Matches are tokenized in Balanced and Strict profiles.</p></details>
+          <p id="message" class="message" role="status" aria-live="polite">Pattern matching cannot guarantee removal of all sensitive data. Always review the output.</p>
+        </section>
+
+        <section class="how-it-works" aria-labelledby="how-title">
+          <div class="section-heading"><span class="eyebrow">HOW IT WORKS</span><h2 id="how-title">A review step you control.</h2><p>Patterns reduce accidental disclosure. They cannot judge whether every detail is safe to share.</p></div>
+          <div class="feature-grid">
+            <div class="feature"><span class="feature-number">01 / INPUT</span><h3>Paste locally</h3><p>Your text is processed in this tab. It is never uploaded by the app.</p></div>
+            <div class="feature"><span class="feature-number">02 / SCAN</span><h3>Replace common risks</h3><p>Credentials are redacted and selected identifiers become consistent placeholders.</p></div>
+            <div class="feature"><span class="feature-number">03 / REVIEW</span><h3>Decide what to share</h3><p>Inspect the entire result, then copy it only when you are satisfied.</p></div>
+          </div>
+        </section>
+      </main>
+      <footer class="site-footer"><span>Developer Privacy Guard</span><span>Local by design · Review before sharing</span></footer>
+    </div>
+  </body>
+</html>
