@@ -2425,50 +2425,75 @@
     return m.index + m[0].lastIndexOf(value);
   }
   function normalizeKey(key) {
-    return key.replace(/([a-z])([A-Z])/g, "$1_$2").replace(/[^a-zA-Z0-9]+/g, "_").toLowerCase();
+    return key.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^a-zA-Z0-9]+/g, "_").toLowerCase();
+  }
+  var PLACEHOLDER_RE = /^(?:null|none|undefined|true|false|changeme|example|placeholder|your_.*|<.*>|\$\{.*\}|\[REDACTED_[A-Z0-9_]+\]|\[[A-Z0-9_]+_\d+\])$/i;
+  function isPlaceholder(value) {
+    return PLACEHOLDER_RE.test(value);
+  }
+  var NON_ID_PLACEHOLDER_RE = /^(?:default|unknown|n\/a|na|anonymous)$/i;
+  function isIdPlaceholder(value) {
+    return PLACEHOLDER_RE.test(value) || NON_ID_PLACEHOLDER_RE.test(value);
   }
 
   // src/detectors/PrivateKeys.ts
   function privateKeys(text, emit) {
-    scanRegex(text, /-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/g, (m) => add(emit, "private-key", "pem-private-key", m.index, m.index + m[0].length, "REDACT", "[REDACTED_PRIVATE_KEY]", 100));
+    scanRegex(text, /-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----/g, (m) => add(emit, "private-key", "pem-private-key", m.index, m.index + m[0].length, "REDACT", "[REDACTED_PRIVATE_KEY]", 100));
   }
   function hasUnclosedPrivateKey(text) {
-    const begins = (text.match(/-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/g) ?? []).length;
-    const ends = (text.match(/-----END (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/g) ?? []).length;
+    const begins = (text.match(/-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----/g) ?? []).length;
+    const ends = (text.match(/-----END (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----/g) ?? []).length;
     return begins !== ends;
   }
 
   // src/detectors/ProviderSecrets.ts
   function providerSecrets(text, emit) {
     const rules = [
-      ["aws-access-key", /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, "cloud", "[REDACTED_AWS_ACCESS_KEY]"],
+      ["aws-access-key", /\b(?:AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}\b/g, "cloud", "[REDACTED_AWS_ACCESS_KEY]"],
+      ["gcp-api-key", /\bAIza[0-9A-Za-z_-]{35}\b/g, "cloud", "[REDACTED_API_KEY]"],
+      ["google-oauth-token", /\bya29\.[0-9A-Za-z_-]{20,}\b/g, "web-auth", "[REDACTED_OAUTH_TOKEN]"],
+      ["digitalocean-token", /\bdo[opr]_v1_[a-f0-9]{64}\b/g, "cloud", "[REDACTED_CLOUD_TOKEN]"],
       ["github-token", /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36}\b|\bgithub_pat_[A-Za-z0-9_]{40,}\b/g, "git", "[REDACTED_GITHUB_TOKEN]"],
-      ["gitlab-token", /\bglpat-[A-Za-z0-9_-]{20,}\b/g, "git", "[REDACTED_GITLAB_TOKEN]"],
+      ["gitlab-token", /\bgl(?:pat|rt|dt|ptt|oas)-[A-Za-z0-9_-]{20,}\b/g, "git", "[REDACTED_GITLAB_TOKEN]"],
       ["npm-token", /\bnpm_[A-Za-z0-9]{36}\b/g, "git", "[REDACTED_NPM_TOKEN]"],
+      ["pypi-token", /\bpypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{30,}\b/g, "git", "[REDACTED_PYPI_TOKEN]"],
+      ["docker-pat", /\bdckr_pat_[A-Za-z0-9_-]{20,}\b/g, "infrastructure", "[REDACTED_DOCKER_TOKEN]"],
+      ["vault-token", /\bhvs\.[A-Za-z0-9_-]{20,}\b/g, "infrastructure", "[REDACTED_VAULT_TOKEN]"],
       ["stripe-key", /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g, "third-party", "[REDACTED_STRIPE_KEY]"],
+      ["stripe-webhook-secret", /\bwhsec_[A-Za-z0-9]{24,}\b/g, "third-party", "[REDACTED_STRIPE_KEY]"],
       ["openai-key", /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g, "third-party", "[REDACTED_API_KEY]"],
       ["anthropic-key", /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g, "third-party", "[REDACTED_API_KEY]"],
       ["slack-token", /\bxox[baprs]-[A-Za-z0-9-]{12,}\b/g, "third-party", "[REDACTED_SLACK_TOKEN]"],
+      ["slack-webhook", /https:\/\/hooks\.slack\.com\/services\/T[A-Z0-9]{8,}\/B[A-Z0-9]{8,}\/[A-Za-z0-9]{20,}/g, "third-party", "[REDACTED_SLACK_WEBHOOK]"],
       ["sendgrid-key", /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g, "third-party", "[REDACTED_SENDGRID_KEY]"],
-      ["huggingface-token", /\bhf_[A-Za-z0-9]{30,}\b/g, "third-party", "[REDACTED_API_KEY]"]
+      ["huggingface-token", /\bhf_[A-Za-z0-9]{30,}\b/g, "third-party", "[REDACTED_API_KEY]"],
+      ["databricks-token", /\bdapi[0-9a-f]{32}(?:-\d)?\b/g, "third-party", "[REDACTED_API_KEY]"],
+      ["shopify-token", /\bshp(?:at|ca|pa|ss)_[a-fA-F0-9]{32}\b/g, "third-party", "[REDACTED_SHOPIFY_TOKEN]"],
+      ["postman-key", /\bPMAK-[A-Za-z0-9]{24}-[A-Za-z0-9]{34}\b/g, "third-party", "[REDACTED_API_KEY]"],
+      ["linear-key", /\blin_api_[A-Za-z0-9]{30,}\b/g, "third-party", "[REDACTED_API_KEY]"],
+      ["groq-key", /\bgsk_[A-Za-z0-9]{40,}\b/g, "third-party", "[REDACTED_API_KEY]"],
+      ["perplexity-key", /\bpplx-[A-Za-z0-9]{40,}\b/g, "third-party", "[REDACTED_API_KEY]"],
+      ["replicate-token", /\br8_[A-Za-z0-9]{30,}\b/g, "third-party", "[REDACTED_API_KEY]"],
+      ["xai-key", /\bxai-[A-Za-z0-9]{40,}\b/g, "third-party", "[REDACTED_API_KEY]"]
     ];
     for (const [id, re, category, replacement] of rules) scanRegex(text, re, (m) => add(emit, category, id, m.index, m.index + m[0].length, "REDACT", replacement, 90));
   }
 
   // src/detectors/GenericSecrets.ts
-  var SECRET_KEYS = /^(?:.*_)?(?:api_key|secret|secret_key|client_secret|password|passwd|pwd|access_token|refresh_token|auth_token|session_token|private_key|signing_key|jwt_secret|smtp_password|db_password|credential|credentials|connection_password|account_key|ci_job_token|runner_token|deployment_token)$/;
+  var SECRET_KEYS = /^(?:.*_)?(?:api_key|api_secret|api_token|app_secret|app_key|secret|secret_key|secret_access_key|secret_token|secret_id|client_secret|client_key|access_key|access_key_id|password|passwd|pwd|passphrase|access_token|refresh_token|auth_token|session_token|session_id|id_token|oauth_token|bearer_token|private_token|personal_access_token|bot_token|verify_token|verification_token|security_token|private_key|signing_key|signing_secret|jwt_secret|webhook_secret|encryption_key|decryption_key|master_key|hmac_key|hmac_secret|shared_secret|cookie_secret|session_secret|token_secret|smtp_password|db_password|credential|credentials|connection_password|account_key|sas_token|shared_access_signature|service_key|service_role_key|anon_key|ci_job_token|runner_token|deployment_token|csrf_token|xsrf_token|consumer_secret|oauth_secret|x_api_key|x_auth_token|x_amz_security_token|x_amz_signature|x_amz_credential|x_goog_signature|x_goog_credential)$/;
   function genericSecrets(text, emit) {
     scanRegex(text, /(?<![A-Za-z0-9_.-])(?:["']?)([A-Za-z][\w.-]{1,70})(?:["']?)\s*(?::|=>|=)\s*(?:"((?:\\.|[^"\\]){1,1000000})"|'((?:\\.|[^'\\]){1,1000000})'|([^,;}\]\r\n"'{\[]{1,1000000}))/gm, (m) => {
       const key = normalizeKey(m[1]);
       const value = (m[2] ?? m[3] ?? m[4]).trim();
-      if (!SECRET_KEYS.test(key) || /^(?:null|none|undefined|true|false|changeme|example|placeholder|your_.*|<.*>|\$\{.*\})$/i.test(value)) return;
+      if (!SECRET_KEYS.test(key) || isPlaceholder(value)) return;
       const start = valueOffset(m, value);
-      add(emit, "credential", "credential-assignment", start, start + value.length, "REDACT", key.includes("password") || key === "pwd" || key === "passwd" ? "[REDACTED_PASSWORD]" : "[REDACTED_SECRET]", 75);
+      add(emit, "credential", "credential-assignment", start, start + value.length, "REDACT", key.includes("password") || key === "pwd" || key === "passwd" || key === "passphrase" ? "[REDACTED_PASSWORD]" : "[REDACTED_SECRET]", 75);
     });
     scanRegex(text, /<([A-Za-z][\w.-]{1,70})>([^<\r\n]{1,1000000})<\/\1>/g, (m) => {
-      if (!SECRET_KEYS.test(normalizeKey(m[1]))) return;
-      const start = valueOffset(m, m[2]);
-      add(emit, "credential", "xml-secret", start, start + m[2].length, "REDACT", "[REDACTED_SECRET]", 75);
+      const value = m[2].trim();
+      if (!SECRET_KEYS.test(normalizeKey(m[1])) || isPlaceholder(value)) return;
+      const start = valueOffset(m, value);
+      add(emit, "credential", "xml-secret", start, start + value.length, "REDACT", "[REDACTED_SECRET]", 75);
     });
   }
 
@@ -2478,9 +2503,29 @@
       const start = valueOffset(m, m[1]);
       add(emit, "web-auth", "authorization", start, start + m[1].length, "REDACT", "[REDACTED_AUTH_TOKEN]", 88);
     });
+    scanRegex(text, /\b(?:Proxy-)?Authorization\s*:\s*(?:Token|ApiKey|Api-Key|Digest|OAuth|AWS)\s+([^\r\n"']+)/gi, (m) => {
+      const v = m[1].trim();
+      if (!v) return;
+      const start = valueOffset(m, v);
+      add(emit, "web-auth", "authorization-header", start, start + v.length, "REDACT", "[REDACTED_AUTH_TOKEN]", 88);
+    });
+    scanRegex(text, /\bAWS4-HMAC-SHA256\b[^\r\n]*/gi, (m) => {
+      const re = /\b(?:Credential|Signature)=([^,\s"']+)/gi;
+      let p;
+      while (p = re.exec(m[0])) {
+        const start = m.index + p.index + p[0].lastIndexOf(p[1]);
+        add(emit, "cloud", "aws-sigv4", start, start + p[1].length, "REDACT", "[REDACTED_SECRET]", 92);
+      }
+    });
     scanRegex(text, /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, (m) => add(emit, "web-auth", "jwt", m.index, m.index + m[0].length, "REDACT", "[REDACTED_JWT]", 85));
+    scanRegex(text, /[?&]((?:x-amz-signature|x-amz-security-token|x-amz-credential|awsaccesskeyid|x-goog-signature|x-goog-credential|api_?key|access_?token|refresh_?token|auth_?token|id_?token|token|secret|password|passwd|pwd|jwt|sig|signature|sas|shared_access_signature))=([^&\s"'<>#]+)/gi, (m) => {
+      if (isPlaceholder(m[2])) return;
+      const priority = /^(?:x-amz-|x-goog-|awsaccesskeyid)/i.test(m[1]) ? 92 : 84;
+      const start = valueOffset(m, m[2]);
+      add(emit, "web-auth", "query-secret", start, start + m[2].length, "REDACT", "[REDACTED_AUTH_TOKEN]", priority);
+    });
     scanRegex(text, /\b(?:set-cookie|cookie)\s*:\s*[^\r\n]*/gi, (m) => {
-      const re = /(?:^|;\s*)([\w-]*(?:session|auth|token|jwt)[\w-]*)=([^;\s]+)/gi;
+      const re = /(?:^|;\s*)([\w.-]*(?:session|sessid|auth|token|jwt|sid|csrf|xsrf|secret|awsalb(?:cors)?)[\w.-]*)=([^;\s"']+)/gi;
       let c;
       while (c = re.exec(m[0])) {
         const start = m.index + c.index + c[0].lastIndexOf(c[2]);
@@ -2491,7 +2536,7 @@
 
   // src/detectors/DatabaseSecrets.ts
   function databaseSecrets(text, emit) {
-    scanRegex(text, /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s"'<>]{1,1000000}/gi, (m) => {
+    scanRegex(text, /\b(?:postgres(?:ql)?|mysql|mariadb|mssql|sqlserver|mongodb(?:\+srv)?|rediss?|amqps?|cockroachdb|clickhouse|neo4j(?:\+s)?):\/\/[^\s"'<>]{1,1000000}/gi, (m) => {
       const url = m[0];
       const auth = url.match(/^([a-z+]+:\/\/)([^@\/?#]+)@/i);
       if (auth) {
@@ -2527,12 +2572,27 @@
     if (profile2 === "credentials") return;
     const strict = profile2 === "strict";
     scanRegex(text, /\b\d{12}\b/g, (m) => {
-      if (/\b(?:account|aws_account|account_id)\b.{0,24}$/i.test(text.slice(Math.max(0, m.index - 35), m.index)) || strict) add(emit, "cloud", "aws-account", m.index, m.index + 12, "TOKENIZE", "", 55, "AWS_ACCOUNT");
+      if (/(?:\b(?:[a-z]+_)?account(?:_?(?:id|num|number))?\b|\b(?:owner|payer|caller|master|member)_?(?:account_?)?id\b|\baccountId\b|\bawsAccountId\b|\bownerId\b).{0,24}$/i.test(text.slice(Math.max(0, m.index - 40), m.index)) || strict) add(emit, "cloud", "aws-account", m.index, m.index + 12, "TOKENIZE", "", 55, "AWS_ACCOUNT");
     });
-    scanRegex(text, /\barn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:[^\s"']+/gi, (m) => add(emit, "cloud", "aws-arn", m.index, m.index + m[0].length, "TOKENIZE", "", 60, "AWS_ARN"));
+    scanRegex(text, /\barn:aws(?:-[a-z0-9-]+)*:[a-z0-9-]+:[a-z0-9-]*:(?:\d{12}|aws)?(?::[^\s"'<>()\[\]{},;]+)+/gi, (m) => {
+      const val = m[0].replace(/\.+$/, "");
+      if (val.length > 8) add(emit, "cloud", "aws-arn", m.index, m.index + val.length, "TOKENIZE", "", 68, "AWS_ARN");
+    });
     scanRegex(text, /\bs3:\/\/([a-z0-9.-]{3,63})/gi, (m) => {
       const start = valueOffset(m, m[1]);
       add(emit, "cloud", "s3-bucket", start, start + m[1].length, "TOKENIZE", "", 55, "S3_BUCKET");
+    });
+    scanRegex(text, /(?:^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\t|(?:START|END|REPORT)\s+RequestId:\s*)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/gm, (m) => {
+      const start = valueOffset(m, m[1]);
+      add(emit, "cloud", "aws-lambda-request-id", start, start + m[1].length, "TOKENIZE", "", 68, "REQUEST_ID");
+    });
+    scanRegex(text, /\b[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}\b/gi, (m) => add(emit, "infrastructure", "traceparent", m.index, m.index + m[0].length, "TOKENIZE", "", 66, "TRACE_ID"));
+    scanRegex(text, /(?<![A-Za-z0-9_.-])(?:["']?)(x-amz-request-id|x-amzn-requestid|x-amz-id-2|x-amz-cf-id|x-amz-apigw-id|x-amzn-trace-id|x-request-id|x-correlation-id|x-trace-id|x-b3-traceid|x-b3-spanid|x-cloud-trace-context|cf-ray|traceparent|(?:[a-z]+_)?(?:request|req|extended[_. -]?request|client[_. -]?request|amz[_. -]?request|cf|correlation|trace|span|parent|execution|invocation|run|job|task|transaction|tx|event|message|operation)[_. -]?id)(?:["']?)\s*(?::|=>|=)\s*["']?([A-Za-z0-9+/][A-Za-z0-9_+/=.-]{3,128})/gi, (m) => {
+      const val = m[2].replace(/\.+$/, "");
+      if (isIdPlaceholder(val) || val.length < 4) return;
+      const start = valueOffset(m, val);
+      const isTrace = /trace|span|parent/i.test(m[1]);
+      add(emit, "infrastructure", "request-trace-id", start, start + val.length, "TOKENIZE", "", 66, isTrace ? "TRACE_ID" : "REQUEST_ID");
     });
     scanRegex(text, /\b(?:10|127|192\.168|172\.(?:1[6-9]|2\d|3[01]))(?:\.\d{1,3}){2}\b/g, (m) => {
       const parts = m[0].split(".").map(Number);
@@ -2546,12 +2606,21 @@
       }
     });
     scanRegex(text, /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, (m) => add(emit, "personal", "email", m.index, m.index + m[0].length, "TOKENIZE", "", 55, "USER_EMAIL"));
-    scanRegex(text, /\b(?:customer|user|employee|deployment|cluster)[_. -]?id\s*[:=]\s*["']?([\w-]{4,80})/gi, (m) => {
+    scanRegex(text, /\b(?:customer|user|employee|member|order|invoice|payment|ticket|case|record|entity|device|machine|host|server|node|pod|service|endpoint|channel|webhook|database|db|table|collection|deployment|cluster)[_. -]?id\b\s*(?::|=>|=)\s*["']?([\w-]{4,80})/gi, (m) => {
+      if (isIdPlaceholder(m[1])) return;
       const start = valueOffset(m, m[1]);
-      add(emit, "personal", "structured-id", start, start + m[1].length, "TOKENIZE", "", 55, m[0].toLowerCase().includes("deployment") ? "DEPLOYMENT_ID" : "USER_ID");
+      const k = m[0].toLowerCase();
+      const tokenType = k.includes("deployment") ? "DEPLOYMENT_ID" : k.includes("cluster") ? "CLUSTER_ID" : "USER_ID";
+      add(emit, "personal", "structured-id", start, start + m[1].length, "TOKENIZE", "", 55, tokenType);
     });
+    scanRegex(text, /(?<![A-Za-z0-9_.-])(?:["']?)(?:id|uuid|guid)(?:["']?)\s*(?::|=>|=)\s*["']?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/gi, (m) => {
+      const start = valueOffset(m, m[1]);
+      add(emit, "personal", "kv-uuid", start, start + m[1].length, "TOKENIZE", "", 66, "UUID");
+    });
+    if (strict) scanRegex(text, /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, (m) => add(emit, "personal", "uuid", m.index, m.index + m[0].length, "TOKENIZE", "", 66, "UUID"));
     scanRegex(text, /\b[A-Z]{5}\d{4}[A-Z]\b/g, (m) => add(emit, "personal", "indian-pan", m.index, m.index + m[0].length, "TOKENIZE", "", 50, "PAN"));
     scanRegex(text, /\b(?:\d[ -]?){13,19}\b/g, (m) => {
+      if (/[0-9a-f]-$/i.test(text.slice(Math.max(0, m.index - 2), m.index))) return;
       const digits = m[0].replace(/\D/g, "");
       if (digits.length >= 13 && digits.length <= 19 && luhn(digits)) add(emit, "personal", "credit-card", m.index, m.index + m[0].length, "TOKENIZE", "", 65, "CARD");
     });
@@ -2604,9 +2673,48 @@
   // src/detectors/CloudIdentifiers.ts
   function cloudIdentifiers(text, emit, profile2) {
     if (profile2 === "credentials") return;
-    scanRegex(text, /\b(?:subscription|tenant|project)[_. -]?id\s*[:=]\s*["']?([a-f0-9-]{20,80})/gi, (m) => {
+    scanRegex(text, /\b(?:AIDA|AROA|AGPA|AIPA|ANPA|ANVA|APKA|ASCA)[A-Z0-9]{16,17}\b/g, (m) => add(emit, "cloud", "aws-iam-id", m.index, m.index + m[0].length, "TOKENIZE", "", 65, "AWS_IAM_ID"));
+    scanRegex(text, /\b(?:i|vpc|subnet|sg|eni|igw|nat|rtb|acl|vol|snap|ami|eipalloc|eipassoc|tgw|vpce|pcx|lt|fl|dopt|vgw|cgw|vpn|pl|fs|mt|aki|ari)-[0-9a-f]{8}(?:[0-9a-f]{9})?\b/g, (m) => add(emit, "cloud", "aws-resource-id", m.index, m.index + m[0].length, "TOKENIZE", "", 58, "AWS_RESOURCE_ID"));
+    scanRegex(text, /\b(?:us|eu|ap|ca|sa|me|af|il|cn)-(?:east|west|north|south|central|northeast|northwest|southeast|southwest)-[1-9]_[A-Za-z0-9]{9}\b/g, (m) => add(emit, "cloud", "aws-cognito-pool-id", m.index, m.index + m[0].length, "TOKENIZE", "", 58, "AWS_RESOURCE_ID"));
+    scanRegex(text, /\bRoot=1-[0-9a-f]{8}-[0-9a-f]{24}(?:;Parent=[0-9a-f]{16})?(?:;Sampled=[01])?(?:;Lineage=[0-9a-f:]+)?/gi, (m) => add(emit, "cloud", "aws-xray-trace-id", m.index, m.index + m[0].length, "TOKENIZE", "", 68, "TRACE_ID"));
+    scanRegex(text, /\b1-[0-9a-f]{8}-[0-9a-f]{24}\b/g, (m) => add(emit, "cloud", "aws-xray-trace-id", m.index, m.index + m[0].length, "TOKENIZE", "", 66, "TRACE_ID"));
+    scanRegex(text, /\b(\d{12})\.dkr\.ecr(?:-fips)?\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?\b/gi, (m) => {
       const start = valueOffset(m, m[1]);
-      add(emit, "cloud", "cloud-project-id", start, start + m[1].length, "TOKENIZE", "", 55, "CLOUD_ID");
+      add(emit, "cloud", "aws-ecr-account", start, start + m[1].length, "TOKENIZE", "", 55, "AWS_ACCOUNT");
+    });
+    scanRegex(text, /\bsqs\.[a-z0-9-]+\.amazonaws\.com\/(\d{12})\b/gi, (m) => {
+      const start = valueOffset(m, m[1]);
+      add(emit, "cloud", "aws-sqs-account", start, start + m[1].length, "TOKENIZE", "", 55, "AWS_ACCOUNT");
+    });
+    scanRegex(text, /https?:\/\/([a-z0-9]{10})\.execute-api\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?\b/gi, (m) => {
+      const start = valueOffset(m, m[1]);
+      add(emit, "cloud", "aws-apigw-id", start, start + m[1].length, "TOKENIZE", "", 55, "AWS_RESOURCE_ID");
+    });
+    scanRegex(text, /https?:\/\/(d[a-z0-9]{10,16})\.cloudfront\.net\b/gi, (m) => {
+      const start = valueOffset(m, m[1]);
+      add(emit, "cloud", "aws-cloudfront-domain", start, start + m[1].length, "TOKENIZE", "", 55, "AWS_RESOURCE_ID");
+    });
+    scanRegex(text, /https?:\/\/([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])\.s3(?:[.-][a-z0-9-]+)*\.amazonaws\.com(?:\.cn)?\b/gi, (m) => {
+      const start = valueOffset(m, m[1]);
+      add(emit, "cloud", "s3-bucket-url", start, start + m[1].length, "TOKENIZE", "", 55, "S3_BUCKET");
+    });
+    scanRegex(text, /https?:\/\/s3(?:[.-][a-z0-9-]+)*\.amazonaws\.com(?:\.cn)?\/([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])(?=[/?#\s"'<>]|$)/gi, (m) => {
+      const start = valueOffset(m, m[1]);
+      add(emit, "cloud", "s3-bucket-path-url", start, start + m[1].length, "TOKENIZE", "", 55, "S3_BUCKET");
+    });
+    scanRegex(text, /\/subscriptions\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/resourceGroups\/[^\s"'<>()\[\]{},;]+)?/gi, (m) => {
+      const val = m[0].replace(/\.+$/, "");
+      add(emit, "cloud", "azure-resource-id", m.index, m.index + val.length, "TOKENIZE", "", 60, "AZURE_RESOURCE");
+    });
+    scanRegex(text, /\bprojects\/[a-z][a-z0-9-]{4,30}\/(?:locations|regions|zones|topics|subscriptions|secrets|serviceAccounts|buckets|databases|instances|clusters|jobs|datasets|repositories|keys)\/[^\s"'<>()\[\]{},;]+/g, (m) => {
+      const val = m[0].replace(/\.+$/, "");
+      add(emit, "cloud", "gcp-resource-path", m.index, m.index + val.length, "TOKENIZE", "", 60, "GCP_RESOURCE");
+    });
+    scanRegex(text, /\b(?:(?:[a-z]+_)?(?:account|subscription|tenant|project|organization|org|workspace|folder|billing_account|environment|env|distribution|hosted_zone|kms_key|key|vault|bucket|queue|topic|stream|client|app|application|principal|role|policy|identity|instance|vpc|subnet|security_group|sg|installation)[_. -]?id|resource_group(?:_name)?)\b\s*(?::|=>|=)\s*["']?([A-Za-z0-9][A-Za-z0-9._:/-]{3,80})/gi, (m) => {
+      const val = m[1].replace(/\.+$/, "");
+      if (isIdPlaceholder(val) || val.length < 4) return;
+      const start = valueOffset(m, val);
+      add(emit, "cloud", "cloud-project-id", start, start + val.length, "TOKENIZE", "", 53, "CLOUD_ID");
     });
     scanRegex(text, /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.iam\.gserviceaccount\.com\b/g, (m) => add(emit, "cloud", "gcp-service-account", m.index, m.index + m[0].length, "TOKENIZE", "", 65, "SERVICE_ACCOUNT"));
     if (profile2 === "strict") scanRegex(text, /\b(?:[a-z0-9-]+\.)+(?:internal|corp|local)\b/gi, (m) => {

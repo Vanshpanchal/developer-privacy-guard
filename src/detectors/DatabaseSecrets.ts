@@ -1,6 +1,6 @@
 import {add,scanRegex,type Emit} from './common';
 export function databaseSecrets(text:string,emit:Emit):void {
-  scanRegex(text,/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s"'<>]{1,1000000}/gi,m=>{
+  scanRegex(text,/\b(?:postgres(?:ql)?|mysql|mariadb|mssql|sqlserver|mongodb(?:\+srv)?|rediss?|amqps?|cockroachdb|clickhouse|neo4j(?:\+s)?):\/\/[^\s"'<>]{1,1000000}/gi,m=>{
     const url=m[0]; const auth=url.match(/^([a-z+]+:\/\/)([^@\/?#]+)@/i);
     if(auth){const colon=auth[2].indexOf(':'); if(colon>=0){const start=m.index+auth[1].length+colon+1;add(emit,'database','database-url-password',start,start+auth[2].length-colon-1,'REDACT','[REDACTED_PASSWORD]',85);}}
   });
