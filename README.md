@@ -29,8 +29,9 @@ Keep that command running in a terminal and open `http://localhost:8000`. Stop t
 The [Pages workflow](.github/workflows/pages.yml) checks the project, builds the site, and publishes only the `web/` folder on each push to `main`. Its relative asset paths work under a project URL such as `https://<owner>.github.io/<repository>/`.
 
 1. If this folder has no Git metadata, run `git init -b main`. Review `git status`, commit the project, create a public GitHub repository, and push `main`. Do not commit `node_modules`, local `.env` files, or real logs and credentials.
-2. In the repository, open **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
-3. Check the **Actions** tab for the **Publish web app to GitHub Pages** workflow. When deployment succeeds, use the URL shown in **Settings → Pages**.
+2. Add a repository secret named `PAGES_TOKEN` containing a personal access token with repository or Pages write permission. The workflow uses it to enable Pages when needed.
+3. In the repository, open **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
+4. Check the **Actions** tab for the **Publish web app to GitHub Pages** workflow. When deployment succeeds, use the URL shown in **Settings → Pages**.
 
 The workflow can also be run manually from the Actions tab. Publishing requires a repository and GitHub Pages enabled; this local folder alone is not a live website.
 
